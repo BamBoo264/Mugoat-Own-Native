@@ -1,0 +1,11 @@
+build/
+audit/
+*.rpf
+*.ydr
+*.ytd
+*.mnmesh
+*.key
+*.ipa
+*.xcodeproj/
+__pycache__/
+*.pyc

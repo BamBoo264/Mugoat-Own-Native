@@ -1,0 +1,38 @@
+name: Validate independently authored native core
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: own-native-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native-core:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and exercise production asset/geometry core with ASan
+        run: |
+          python3 tests/generate_fixture.py "$RUNNER_TEMP/fixtures"
+          python3 tools/build_testlib.py "$RUNNER_TEMP/core-lib" --sanitize
+          swiftc -sanitize=address -import-objc-header Core/RuntimeBridge.h Core/RPF7Archive.swift Core/ResourceMemory.swift Core/WorldMath.swift Core/DrawableMesh.swift Core/AssetKey.swift Core/NativeSceneLoader.swift tests/core.swift "$RUNNER_TEMP/core-lib/runtime.a" -lz -o "$RUNNER_TEMP/core-tests"
+          "$RUNNER_TEMP/core-tests" "$RUNNER_TEMP/fixtures"
+      - name: Build authored iPhone engine lab (not GTA gameplay)
+        run: |
+          command -v xcodegen >/dev/null || brew install xcodegen
+          xcodegen generate
+          xcodebuild -project MugoatOwnEngine.xcodeproj -scheme MugoatOwnEngine -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO build > build/xcodebuild.log 2>&1 || { tail -100 build/xcodebuild.log; exit 1; }
+          mkdir -p build/Payload
+          cp -R build/DerivedData/Build/Products/Release-iphoneos/MugoatOwnEngine.app build/Payload/
+          cd build
+          zip -qry Mugoat-OwnEngine-LAB-NOT-GAME-UNSIGNED.ipa Payload
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: OwnNative-LAB-NOT-COMPLETE-GTA-ENGINE
+          path: |
+            build/Mugoat-OwnEngine-LAB-NOT-GAME-UNSIGNED.ipa
+            build/xcodebuild.log

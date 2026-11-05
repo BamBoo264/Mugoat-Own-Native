@@ -1,0 +1,40 @@
+name: MugoatOwnEngine
+options:
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    PRODUCT_BUNDLE_IDENTIFIER: vn.mugoat.ownengine.lab
+    CODE_SIGNING_ALLOWED: NO
+    GCC_PREPROCESSOR_DEFINITIONS: ["$(inherited)", "ZSTD_DISABLE_ASM"]
+    SWIFT_OBJC_BRIDGING_HEADER: Core/RuntimeBridge.h
+targets:
+  MugoatOwnEngine:
+    type: application
+    platform: iOS
+    sources:
+      - Core
+      - iOS
+      - path: Vendor/zstd/lib
+        excludes: ["**/*.S"]
+    dependencies:
+      - sdk: libz.tbd
+      - sdk: MetalKit.framework
+    resources:
+      - path: Vendor/zstd/LICENSE
+    info:
+      path: build/Info.plist
+      properties:
+        CFBundleDisplayName: Mugoat Own Engine Lab
+        CFBundleShortVersionString: "0.0.1"
+        CFBundleVersion: "1"
+        UILaunchScreen: {}
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+schemes:
+  MugoatOwnEngine:
+    build:
+      targets:
+        MugoatOwnEngine: all
