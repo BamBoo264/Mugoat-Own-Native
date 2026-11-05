@@ -18,7 +18,7 @@ import UniformTypeIdentifiers
  override func viewDidLoad(){
   super.viewDidLoad();title="Mugoat Own Engine · Lab";view.backgroundColor = .black
   navigationItem.rightBarButtonItem=UIBarButtonItem(title:"Data",style:.plain,target:self,action:#selector(choose))
-  navigationItem.leftBarButtonItem=UIBarButtonItem(title:"Mô hình",style:.plain,target:self,action:#selector(models))
+  navigationItem.leftBarButtonItems=[UIBarButtonItem(title:"Mô hình",style:.plain,target:self,action:#selector(models)),UIBarButtonItem(title:"Bản đồ thử",style:.plain,target:self,action:#selector(maps))]
   guard let device=MTLCreateSystemDefaultDevice() else{status.text="Thiết bị không có Metal";return}
   let canvas=MTKView(frame:.zero,device:device);canvas.translatesAutoresizingMaskIntoConstraints=false;canvas.colorPixelFormat = .bgra8Unorm_srgb;view.addSubview(canvas)
   status.numberOfLines=3;status.text="Engine riêng đang phát triển. Chọn thư mục game chứa data và b. Chưa có gameplay GTA V.";status.textColor = .white;status.backgroundColor=UIColor.black.withAlphaComponent(0.7);status.font = .monospacedSystemFont(ofSize:11,weight:.regular);status.translatesAutoresizingMaskIntoConstraints=false;view.addSubview(status)
@@ -77,6 +77,20 @@ import UniformTypeIdentifiers
    loading=false;status.text="Không đọc được data: "+error.localizedDescription
    if automatic,url.standardizedFileURL != documents.standardizedFileURL{scanDocuments()}
   }}
+ }
+ @objc private func maps(){
+  guard !loading,!names.isEmpty else{return}
+  loading=true;status.text="Đang đọc danh sách YMAP Downtown…"
+  Task{do{let list=try await scene.mapNames();loading=false
+   let browser=ModelBrowser(names:list){[weak self] name in self?.loadSector(name)}
+   present(UINavigationController(rootViewController:browser),animated:true)
+  }catch{loading=false;status.text=error.localizedDescription}}
+ }
+ private func loadSector(_ name:String){
+  loading=true;hasMesh=false;renderer?.clearMesh();status.text="Đang giải mã sector "+name
+  Task{do{let result=try await scene.sector(name);try renderer?.setMesh(result.mesh);loading=false
+   status.text=name+"\n"+result.report+"\nVuốt xoay · Chụm zoom · Chưa có texture/gameplay"
+  }catch{loading=false;status.text=error.localizedDescription}}
  }
  @objc private func models(){
   guard !loading,!names.isEmpty else{return}

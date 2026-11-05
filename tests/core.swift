@@ -40,6 +40,23 @@ import Foundation
   let empty=dir.appendingPathComponent("new-documents");GameRootLocator.prepareDocuments(empty)
   assert(fm.fileExists(atPath:empty.appendingPathComponent("HUONG-DAN-DATA.txt").path))
   assert(GameRootLocator.find(in:empty)==nil)
+  // Synthetic PRD0: one translated entity, with pointers into three validated blocks.
+  var meta=Data(repeating:0,count:1024)
+  func put(_ offset:Int,_ value:UInt64,_ count:Int){for i in 0..<count{meta[offset+i]=UInt8(truncatingIfNeeded:value >> (8*i))}}
+  put(16,0x50524430,4);put(20,0x79,2);put(28,1,4);put(48,0x50000070,8);put(76,3,2)
+  put(112,0xd3593fa6,4);put(116,512,4);put(120,0x50000100,8)
+  put(128,0xce501483,4);put(132,128,4);put(136,0x50000300,8)
+  put(144,7,4);put(148,8,4);put(152,0x50000380,8)
+  put(256+96,3,8);put(256+104,1,2);put(256+106,1,2);put(896,2,8)
+  put(768+8,123,4);put(768+32,UInt64(Float(10).bitPattern),4)
+  for at in [768+60,768+64,768+68]{put(at,UInt64(Float(1).bitPattern),4)}
+  let document=try MapMetadata(ResourceMemory(bytes:meta,systemBytes:1024,graphicsBytes:0))
+  let placements=try document.placements();assert(placements.entities.count==1)
+  assert(placements.entities[0].point(Vec3(x:1,y:2,z:3))==Vec3(x:11,y:2,z:3))
+  do{_ = try document.span(0xfffff002,128);fatalError("Metadata overflow accepted")}catch{}
+  put(768+60,UInt64(Float.nan.bitPattern),4)
+  do{_ = try MapMetadata(ResourceMemory(bytes:meta,systemBytes:1024,graphicsBytes:0)).placements();fatalError("Bad quaternion accepted")}catch{}
+  assert(MapMetadata.hash("ADDER")==MapMetadata.hash("adder"))
   print("PASS: AES archive, opaque resource prefix, geometry, index/NaN rejection, ray collision, fixed timestep, Documents/nested folder discovery and symlink rejection")
  }
 }
