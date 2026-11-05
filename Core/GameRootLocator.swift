@@ -13,9 +13,11 @@ enum GameRootLocator {
  }
  static func find(in selection:URL,maxDepth:Int=4,maxDirectories:Int=128)->URL? {
   if valid(selection){return selection}
-  if ["data","b"].contains(selection.lastPathComponent.lowercased()){return nil}
-  var queue:[(URL,Int)]=[(selection,0)],cursor=0
-  let skip:Set<String>=["data","b","mods","logs",".git"]
+  let fm=FileManager.default
+  if selection.lastPathComponent.lowercased()=="data",fm.fileExists(atPath:selection.appendingPathComponent("manifest.json").path){return nil}
+  if selection.lastPathComponent.lowercased()=="b",fm.fileExists(atPath:selection.appendingPathComponent("8b0b5899ed").path){return nil}
+  var queue:[(URL,Int)]=[(selection,0)],cursor=0,inspected=0
+  let skip:Set<String>=["mods","logs",".git"]
   while cursor<queue.count,cursor<maxDirectories {
    let (folder,depth)=queue[cursor];cursor+=1
    guard depth<maxDepth,let children=try? FileManager.default.contentsOfDirectory(at:folder,includingPropertiesForKeys:[.isDirectoryKey,.isSymbolicLinkKey],options:.skipsHiddenFiles) else{continue}
@@ -23,6 +25,10 @@ enum GameRootLocator {
    let sorted=children.sorted{a,b in if a.lastPathComponent=="game"{return b.lastPathComponent != "game"};if b.lastPathComponent=="game"{return false};return a.lastPathComponent<b.lastPathComponent}
    for child in sorted {
     guard !skip.contains(child.lastPathComponent.lowercased()),let flags=try? child.resourceValues(forKeys:[.isDirectoryKey,.isSymbolicLinkKey]),flags.isDirectory==true,flags.isSymbolicLink != true else{continue}
+    inspected+=1;guard inspected<=maxDirectories else{return nil}
+    let name=child.lastPathComponent.lowercased()
+    if name=="data",fm.fileExists(atPath:child.appendingPathComponent("manifest.json").path){continue}
+    if name=="b",fm.fileExists(atPath:child.appendingPathComponent("8b0b5899ed").path){continue}
     if valid(child){return child}
     if queue.count<maxDirectories{queue.append((child,depth+1))}
    }
