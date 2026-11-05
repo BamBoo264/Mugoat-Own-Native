@@ -13,23 +13,43 @@ import UniformTypeIdentifiers
  private var root:URL?,scoped=false,names:[String]=[],loading=false,hasMesh=false
  private var activeObserver:NSObjectProtocol?
  private var bookmarkTried=false
+ private var sceneSummary=""
+ private var metricWindows=0
+ private let flightPad=UIStackView()
+ private var held=Set<Int>()
+ private var backgroundObserver:NSObjectProtocol?
+
  private var documents:URL{FileManager.default.urls(for:.documentDirectory,in:.userDomainMask)[0]}
  private let archive="data/x64/levels/gta5/generic/procobj.rpf"
  override func viewDidLoad(){
-  super.viewDidLoad();title="Mugoat Own Engine · Lab";view.backgroundColor = .black
+  super.viewDidLoad();title="Own Native · 0.0.4";view.backgroundColor = .black
   navigationItem.rightBarButtonItem=UIBarButtonItem(title:"Data",style:.plain,target:self,action:#selector(choose))
   navigationItem.leftBarButtonItems=[UIBarButtonItem(title:"Mô hình",style:.plain,target:self,action:#selector(models)),UIBarButtonItem(title:"Bản đồ thử",style:.plain,target:self,action:#selector(maps))]
   guard let device=MTLCreateSystemDefaultDevice() else{status.text="Thiết bị không có Metal";return}
   let canvas=MTKView(frame:.zero,device:device);canvas.translatesAutoresizingMaskIntoConstraints=false;canvas.colorPixelFormat = .bgra8Unorm_srgb;view.addSubview(canvas)
-  status.numberOfLines=3;status.text="Engine riêng đang phát triển. Chọn thư mục game chứa data và b. Chưa có gameplay GTA V.";status.textColor = .white;status.backgroundColor=UIColor.black.withAlphaComponent(0.7);status.font = .monospacedSystemFont(ofSize:11,weight:.regular);status.translatesAutoresizingMaskIntoConstraints=false;view.addSubview(status)
+  status.numberOfLines=4;status.text="Engine riêng đang phát triển. Chọn thư mục game chứa data và b. Chưa có gameplay GTA V.";status.textColor = .white;status.backgroundColor=UIColor.black.withAlphaComponent(0.7);status.font = .monospacedSystemFont(ofSize:11,weight:.regular);status.translatesAutoresizingMaskIntoConstraints=false;view.addSubview(status)
   NSLayoutConstraint.activate([canvas.leadingAnchor.constraint(equalTo:view.leadingAnchor),canvas.trailingAnchor.constraint(equalTo:view.trailingAnchor),canvas.topAnchor.constraint(equalTo:view.topAnchor),canvas.bottomAnchor.constraint(equalTo:view.bottomAnchor),status.leadingAnchor.constraint(equalTo:view.safeAreaLayoutGuide.leadingAnchor,constant:12),status.trailingAnchor.constraint(equalTo:view.safeAreaLayoutGuide.trailingAnchor,constant:-12),status.bottomAnchor.constraint(equalTo:view.safeAreaLayoutGuide.bottomAnchor,constant:-8)])
-  do{renderer=try MetalWorldRenderer(view:canvas);renderer?.metrics={[weak self] text in guard let self,!self.loading,self.hasMesh else{return};self.status.text=text+"\nVuốt: xoay · Chụm: zoom · Chưa có gameplay/texture/animation"}}catch{status.text=error.localizedDescription}
+  do{renderer=try MetalWorldRenderer(view:canvas);renderer?.metrics={[weak self] text in guard let self,!self.loading,self.hasMesh else{return};self.metricWindows+=1;if self.metricWindows%15==0{self.log(text)};self.status.text=text+"\n"+self.sceneSummary+"\nChưa có gameplay/texture/animation"}}catch{status.text=error.localizedDescription}
   canvas.addGestureRecognizer(UIPanGestureRecognizer(target:self,action:#selector(look(_:))));canvas.addGestureRecognizer(UIPinchGestureRecognizer(target:self,action:#selector(zoom(_:))))
+  let tools=UIStackView();tools.axis = .horizontal;tools.distribution = .fillEqually;tools.spacing=8;tools.translatesAutoresizingMaskIntoConstraints=false
+  for (title,selector) in [("Thử tổng hợp",#selector(integration)),("Bay / Xoay",#selector(flight)),("Đặt lại",#selector(resetCamera)),("Culling bật/tắt",#selector(toggleCulling))]{
+   let b=UIButton(type:.system);b.configuration = .tinted();b.setTitle(title,for:.normal);b.addTarget(self,action:selector,for:.touchUpInside);tools.addArrangedSubview(b)
+  }
+  view.addSubview(tools)
+  flightPad.axis = .horizontal;flightPad.distribution = .fillEqually;flightPad.spacing=8;flightPad.translatesAutoresizingMaskIntoConstraints=false;flightPad.isHidden=true
+  for (i,title) in ["← Trái","Phải →","↑ Tiến","↓ Lùi","Lên","Xuống"].enumerated(){
+   let b=UIButton(type:.system);b.configuration = .filled();b.setTitle(title,for:.normal);b.tag=i;b.isMultipleTouchEnabled=true
+   b.addTarget(self,action:#selector(moveDown(_:)),for:.touchDown)
+   b.addTarget(self,action:#selector(moveUp(_:)),for:[.touchUpInside,.touchUpOutside,.touchCancel,.touchDragExit]);flightPad.addArrangedSubview(b)
+  }
+  view.addSubview(flightPad)
+  NSLayoutConstraint.activate([tools.topAnchor.constraint(equalTo:view.safeAreaLayoutGuide.topAnchor,constant:4),tools.leadingAnchor.constraint(equalTo:view.safeAreaLayoutGuide.leadingAnchor,constant:12),tools.trailingAnchor.constraint(equalTo:view.safeAreaLayoutGuide.trailingAnchor,constant:-12),tools.heightAnchor.constraint(equalToConstant:40),flightPad.leadingAnchor.constraint(equalTo:tools.leadingAnchor),flightPad.trailingAnchor.constraint(equalTo:tools.trailingAnchor),flightPad.bottomAnchor.constraint(equalTo:status.topAnchor,constant:-8),flightPad.heightAnchor.constraint(equalToConstant:44)])
+  backgroundObserver=NotificationCenter.default.addObserver(forName:UIApplication.willResignActiveNotification,object:nil,queue:.main){[weak self] _ in Task{@MainActor in self?.stopMovement()}}
   GameRootLocator.prepareDocuments(documents)
   activeObserver=NotificationCenter.default.addObserver(forName:UIApplication.didBecomeActiveNotification,object:nil,queue:.main){[weak self] _ in Task{@MainActor in self?.discover()}}
  }
  override func viewDidAppear(_ animated:Bool){super.viewDidAppear(animated);discover()}
- deinit{if let activeObserver{NotificationCenter.default.removeObserver(activeObserver)};if scoped{root?.stopAccessingSecurityScopedResource()}}
+ deinit{if let backgroundObserver{NotificationCenter.default.removeObserver(backgroundObserver)};if let activeObserver{NotificationCenter.default.removeObserver(activeObserver)};if scoped{root?.stopAccessingSecurityScopedResource()}}
  private func discover(){
   guard !loading,names.isEmpty else{return}
   if !bookmarkTried {
@@ -48,6 +68,7 @@ import UniformTypeIdentifiers
   menu.addAction(UIAlertAction(title:"Tìm trong Documents",style:.default){[weak self] _ in self?.scanDocuments()})
   menu.addAction(UIAlertAction(title:"Chọn thư mục qua Tệp",style:.default){[weak self,weak menu] _ in menu?.dismiss(animated:true){self?.pickFolder()}})
   menu.addAction(UIAlertAction(title:"Hướng dẫn",style:.default){[weak self,weak menu] _ in menu?.dismiss(animated:true){self?.showInstructions()}})
+  menu.addAction(UIAlertAction(title:"Chia sẻ log engine",style:.default){[weak self,weak menu] _ in menu?.dismiss(animated:true){self?.shareLog()}})
   menu.addAction(UIAlertAction(title:"Đóng",style:.cancel));present(menu,animated:true)
  }
  private func pickFolder(){
@@ -78,6 +99,40 @@ import UniformTypeIdentifiers
    if automatic,url.standardizedFileURL != documents.standardizedFileURL{scanDocuments()}
   }}
  }
+ private func log(_ text:String){
+  let folder=documents.appendingPathComponent("Logs")
+  do{try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
+   let file=folder.appendingPathComponent("engine-lab.log"),line="[\(ISO8601DateFormatter().string(from:Date()))] \(text)\n"
+   if !FileManager.default.fileExists(atPath:file.path){try Data().write(to:file)}
+   let handle=try FileHandle(forWritingTo:file);defer{try? handle.close()};try handle.seekToEnd();try handle.write(contentsOf:Data(line.utf8))
+  }catch{print("Engine diagnostic write failed")}
+ }
+ private func shareLog(){
+  log("Export diagnostics 0.0.4")
+  let sheet=UIActivityViewController(activityItems:[documents.appendingPathComponent("Logs/engine-lab.log")],applicationActivities:nil)
+  sheet.popoverPresentationController?.sourceView=view;sheet.popoverPresentationController?.sourceRect=CGRect(x:view.bounds.midX,y:view.bounds.midY,width:1,height:1);present(sheet,animated:true)
+ }
+ override func didReceiveMemoryWarning(){super.didReceiveMemoryWarning();log("Memory warning: release archive index; keep active scene");Task{await scene.releaseCaches()}}
+ private func stopMovement(){held=[];renderer?.movement = .zero}
+ private func syncPad(){stopMovement();flightPad.isHidden = !(renderer?.flying ?? false)}
+ @objc private func flight(){guard !loading,hasMesh else{return};renderer?.toggleFlight();syncPad()}
+ @objc private func resetCamera(){renderer?.resetCamera();syncPad()}
+ @objc private func toggleCulling(){renderer?.culling.toggle();log("Culling: \(renderer?.culling ?? false)")}
+ @objc private func moveDown(_ button:UIButton){held.insert(button.tag);updateMovement()}
+ @objc private func moveUp(_ button:UIButton){held.remove(button.tag);updateMovement()}
+ private func updateMovement(){
+  func axis(_ plus:Int,_ minus:Int)->Float{(held.contains(plus) ? 1:0)-(held.contains(minus) ? 1:0)}
+  renderer?.movement=Vec3(x:axis(1,0),y:axis(2,3),z:axis(4,5))
+ }
+ @objc private func integration(){
+  guard !loading,!names.isEmpty else{return}
+  loading=true;hasMesh=false;stopMovement();renderer?.clearMesh();flightPad.isHidden=true;status.text="Đang tải bài thử tổng hợp: YTYP + 3 sector + camera + culling…";log("Combined integration start")
+  Task{do{
+   let result=try await scene.integrationScene();try renderer?.setScene(result);hasMesh=true;loading=false;syncPad()
+   sceneSummary="\(result.chunks.count) sector · camera Bay / Xoay · vuốt nhìn, chụm chỉnh tốc độ/zoom"
+   status.text=result.report;log(result.report+"\nMesh bytes: \(result.bytes)")
+  }catch{loading=false;status.text=error.localizedDescription;log("Integration failed: "+error.localizedDescription)}}
+ }
  @objc private func maps(){
   guard !loading,!names.isEmpty else{return}
   loading=true;status.text="Đang đọc danh sách YMAP Downtown…"
@@ -88,7 +143,7 @@ import UniformTypeIdentifiers
  }
  private func loadSector(_ name:String){
   loading=true;hasMesh=false;renderer?.clearMesh();status.text="Đang giải mã sector "+name
-  Task{do{let result=try await scene.sector(name);try renderer?.setMesh(result.mesh);loading=false
+  Task{do{let result=try await scene.sector(name);try renderer?.setMesh(result.mesh);loading=false;hasMesh=true;sceneSummary=result.report;syncPad();log(name+": "+result.report)
    status.text=name+"\n"+result.report+"\nVuốt xoay · Chụm zoom · Chưa có texture/gameplay"
   }catch{loading=false;status.text=error.localizedDescription}}
  }
@@ -98,7 +153,7 @@ import UniformTypeIdentifiers
  }
  private func load(_ name:String){
   loading=true;hasMesh=false;renderer?.clearMesh();status.text="Đang giải mã geometry: "+name
-  Task{do{let mesh=try await scene.load(archive:archive,asset:name);try renderer?.setMesh(mesh);hasMesh=true;loading=false;status.text="\(name): \(mesh.vertices.count) vertex, \(mesh.triangleCount) triangle"}catch{loading=false;status.text=error.localizedDescription}}
+  Task{do{let mesh=try await scene.load(archive:archive,asset:name);try renderer?.setMesh(mesh);hasMesh=true;loading=false;sceneSummary=name;syncPad();status.text="\(name): \(mesh.vertices.count) vertex, \(mesh.triangleCount) triangle"}catch{loading=false;status.text=error.localizedDescription}}
  }
  @objc private func look(_ gesture:UIPanGestureRecognizer){let delta=gesture.translation(in:view);renderer?.yaw+=Float(delta.x)*0.008;renderer?.pitch+=Float(delta.y)*0.008;gesture.setTranslation(.zero,in:view)}
  @objc private func zoom(_ gesture:UIPinchGestureRecognizer){if let renderer{renderer.zoom=max(0.3,min(20,renderer.zoom/Float(gesture.scale)))};gesture.scale=1}

@@ -9,7 +9,7 @@ def segment(flags):
  base=512<<(flags&15)
  return sum(((flags>>bit)&mask)*weight for bit,mask,weight in [(27,1,1),(26,1,2),(25,1,4),(24,1,8),(17,127,16),(11,63,32),(7,15,64),(5,3,128),(4,1,256)])*base
 
-def decode(raw,system,graphics):
+def decode(raw,system,graphics,root_address=0x50000000):
  if len(raw)<16:raise ValueError('resource prefix')
  sy,gp=segment(system),segment(graphics)
  if not sy or sy+gp>64<<20:raise ValueError('resource budget')
@@ -26,7 +26,7 @@ def decode(raw,system,graphics):
  def u16(b,p):return struct.unpack_from('<H',b,p)[0]
  def u32(b,p):return struct.unpack_from('<I',b,p)[0]
  def u64(b,p):return struct.unpack_from('<Q',b,p)[0]
- root=span(0x50000000,168);header=span(u64(root,80),16);count=u16(header,8)
+ root=span(root_address,168);header=span(u64(root,80),16);count=u16(header,8)
  if count<1 or count>512 or count>u16(header,10):raise ValueError('model count')
  models=span(u64(header,0),count*8);vertices=[];indices=[]
  for i in range(count):

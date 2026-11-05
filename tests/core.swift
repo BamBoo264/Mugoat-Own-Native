@@ -57,6 +57,28 @@ import Foundation
   put(768+60,UInt64(Float.nan.bitPattern),4)
   do{_ = try MapMetadata(ResourceMemory(bytes:meta,systemBytes:1024,graphicsBytes:0)).placements();fatalError("Bad quaternion accepted")}catch{}
   assert(MapMetadata.hash("ADDER")==MapMetadata.hash("adder"))
+  // Dictionary root elsewhere in the same synthetic resource points at our triangle drawable.
+  var dict=bytes
+  func dictPut(_ offset:Int,_ value:UInt64,_ count:Int){for i in 0..<count{dict[offset+i]=UInt8(truncatingIfNeeded:value >> (8*i))}}
+  dictPut(0x920,0x50000a00,8);dictPut(0x928,1,2);dictPut(0x92a,1,2)
+  dictPut(0x930,0x50000a08,8);dictPut(0x938,1,2);dictPut(0x93a,1,2)
+  dictPut(0xa00,123,4);dictPut(0xa08,0x50000000,8)
+  let dictionary=ResourceMemory(bytes:dict,systemBytes:16384,graphicsBytes:0)
+  let roots=try DrawableDictionary.roots(dictionary,address:0x50000900);assert(roots[123]==0x50000000)
+  let dictionaryMesh=try DrawableMesh.decode(dictionary,rootAddress:roots[123]!);assert(dictionaryMesh.triangleCount==1)
+  dictPut(0x938,2,2)
+  do{_ = try DrawableDictionary.roots(ResourceMemory(bytes:dict,systemBytes:16384,graphicsBytes:0),address:0x50000900);fatalError("Bad dictionary count accepted")}catch{}
+  // PRD0 archetype alias points at a verified base archetype, not an arbitrary block.
+  put(112,0xd98bb561,4);put(132,144,4);put(128,0x82d6fc83,4);put(152,0x500003c0,8)
+  put(256+24,3,8);put(256+32,1,2);put(256+34,1,2);put(960,2,8)
+  put(768+88,123,4);put(768+108,3,4);put(768+112,456,4)
+  let aliases=try MapMetadata(ResourceMemory(bytes:meta,systemBytes:1024,graphicsBytes:0)).aliases();assert(aliases[123]==456)
+  let visibleBounds=Bounds3(min:Vec3(x:-1,y:-1,z:1),max:Vec3(x:1,y:1,z:2))
+  let visibility=SceneVisibility(planes:[ScenePlane(normal:Vec3(x:0,y:0,z:1),distance:0)])
+  assert(visibility.contains(visibleBounds));assert(!visibility.contains(Bounds3(min:Vec3(x:-1,y:-1,z:-3),max:Vec3(x:1,y:1,z:-1))))
+  let testScene=NativeWorldScene(chunks:[mesh],report:"");try testScene.validate()
+  do{try testScene.validate(budget:1);fatalError("Scene budget ignored")}catch{}
+  do{try NativeWorldScene(chunks:[StaticMesh(vertices:mesh.vertices,indices:[999,0,1],bounds:mesh.bounds)],report:"").validate();fatalError("Scene index overflow accepted")}catch{}
   print("PASS: AES archive, opaque resource prefix, geometry, index/NaN rejection, ray collision, fixed timestep, Documents/nested folder discovery and symlink rejection")
  }
 }

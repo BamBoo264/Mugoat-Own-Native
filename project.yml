@@ -27,8 +27,8 @@ targets:
       path: build/Info.plist
       properties:
         CFBundleDisplayName: Mugoat Own Engine Lab
-        CFBundleShortVersionString: "0.0.3"
-        CFBundleVersion: "3"
+        CFBundleShortVersionString: "0.0.4"
+        CFBundleVersion: "4"
         UILaunchScreen: {}
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true

@@ -16,13 +16,13 @@ struct StaticMesh {
 }
 /// Original static drawable decoder. Binary field layout is format data, not copied parser code.
 enum DrawableMesh {
- static func decode(_ resource:ResourceMemory)throws->StaticMesh {
+ static func decode(_ resource:ResourceMemory,rootAddress:UInt64=0x50000000)throws->StaticMesh {
   func data(_ address:UInt64,_ count:Int)throws->Data{try resource.slice(address:address,count:count)}
   func u16(_ d:Data,_ p:Int)->UInt16{UInt16(d[p])|UInt16(d[p+1])<<8}
   func u32(_ d:Data,_ p:Int)->UInt32{RPF7Archive.u32(d,p)}
   func u64(_ d:Data,_ p:Int)->UInt64{UInt64(u32(d,p))|UInt64(u32(d,p+4))<<32}
   func float(_ d:Data,_ p:Int)->Float{Float(bitPattern:u32(d,p))}
-  let root=try data(0x50000000,168)
+  let root=try data(rootAddress,168)
   let high=u64(root,80);guard high != 0 else{throw ArchiveFailure.unsupported("drawable has no high LOD")}
   let list=try data(high,16),count=Int(u16(list,8)),capacity=Int(u16(list,10))
   guard count>0,count<=512,count<=capacity else{throw ArchiveFailure.invalid("model array count")}

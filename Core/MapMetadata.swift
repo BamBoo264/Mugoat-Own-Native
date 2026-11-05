@@ -62,6 +62,28 @@ struct MapMetadata {
   }
   return (result,skipped)
  }
+ /// Only verified base/time archetypes; MLO and legacy layouts are not guessed.
+ func aliases()throws->[UInt32:UInt32]{
+  let b=blocks[root]
+  guard b.kind==0xd98bb561,b.bytes.count>=80 else{throw ArchiveFailure.unsupported("not CMapTypes")}
+  let n=Self.u16(b.bytes,32),capacity=Self.u16(b.bytes,34)
+  guard n<=capacity,n<=16384 else{throw ArchiveFailure.invalid("archetype count")}
+  if n==0{return [:]}
+  let refs=try span(Self.u64(b.bytes,24),n*8)
+  var result:[UInt32:UInt32]=[:]
+  for i in 0..<n {
+   let ptr=Self.u64(refs,i*8),id=Int(ptr&0xfff)
+   guard id>0,id<=blocks.count else{throw ArchiveFailure.invalid("archetype block")}
+   let kind=blocks[id-1].kind
+   guard kind==0x82d6fc83 || kind==0x76b0c56c else{continue}
+   let e=try span(ptr,kind==0x82d6fc83 ? 144:160)
+   // assetType 3 is a drawable. Dictionary/interior types require separate loaders.
+   guard RPF7Archive.u32(e,108)==3 else{continue}
+   let name=RPF7Archive.u32(e,88),asset=RPF7Archive.u32(e,112)
+   if name != 0,asset != 0{result[name]=asset}
+  }
+  return result
+ }
  static func hash(_ name:String)->UInt32 {
   var h:UInt32=0
   for c in name.lowercased().utf8{h=h&+UInt32(c);h=h&+(h<<10);h ^= h>>6}
