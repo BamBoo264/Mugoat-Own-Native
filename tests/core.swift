@@ -21,6 +21,25 @@ import Foundation
   corrupt=bytes;corrupt.replaceSubrange(0x600..<0x604,with:[0,0,192,127])
   do{_ = try DrawableMesh.decode(ResourceMemory(bytes:corrupt,systemBytes:16384,graphicsBytes:0));fatalError("NaN accepted")}catch{}
   do{_ = try ResourceMemory(bytes:bytes,systemBytes:16384,graphicsBytes:0).slice(address:0x60000000,count:1);fatalError("Segment overflow accepted")}catch{}
-  print("PASS: AES archive, opaque resource prefix, geometry, index/NaN rejection, ray collision, fixed timestep")
+  let fm=FileManager.default,search=dir.appendingPathComponent("folder-search"),game=search.appendingPathComponent("game")
+  func gameRoot(_ root:URL)throws{
+   for file in ["data/manifest.json","data/x64/levels/gta5/generic/procobj.rpf","asset-aes.key"]{
+    let url=root.appendingPathComponent(file);try fm.createDirectory(at:url.deletingLastPathComponent(),withIntermediateDirectories:true);try Data([1]).write(to:url)
+   }
+  }
+  try gameRoot(game)
+  assert(GameRootLocator.find(in:search)?.standardizedFileURL.path==game.standardizedFileURL.path)
+  assert(GameRootLocator.find(in:game)==game)
+  assert(GameRootLocator.find(in:game.appendingPathComponent("data"))==nil)
+  assert(GameRootLocator.find(in:search,maxDepth:0)==nil)
+  let nested=dir.appendingPathComponent("nested/a/b/game");try gameRoot(nested)
+  assert(GameRootLocator.find(in:dir.appendingPathComponent("nested"))?.standardizedFileURL.path==nested.standardizedFileURL.path)
+  let onlyLink=dir.appendingPathComponent("only-symlink");try fm.createDirectory(at:onlyLink,withIntermediateDirectories:true)
+  try fm.createSymbolicLink(at:onlyLink.appendingPathComponent("game"),withDestinationURL:game)
+  assert(GameRootLocator.find(in:onlyLink)==nil)
+  let empty=dir.appendingPathComponent("new-documents");GameRootLocator.prepareDocuments(empty)
+  assert(fm.fileExists(atPath:empty.appendingPathComponent("HUONG-DAN-DATA.txt").path))
+  assert(GameRootLocator.find(in:empty)==nil)
+  print("PASS: AES archive, opaque resource prefix, geometry, index/NaN rejection, ray collision, fixed timestep, Documents/nested folder discovery and symlink rejection")
  }
 }

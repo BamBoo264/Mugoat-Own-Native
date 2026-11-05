@@ -18,7 +18,7 @@ jobs:
         run: |
           python3 tests/generate_fixture.py "$RUNNER_TEMP/fixtures"
           python3 tools/build_testlib.py "$RUNNER_TEMP/core-lib" --sanitize
-          swiftc -sanitize=address -import-objc-header Core/RuntimeBridge.h Core/RPF7Archive.swift Core/ResourceMemory.swift Core/WorldMath.swift Core/DrawableMesh.swift Core/AssetKey.swift Core/NativeSceneLoader.swift tests/core.swift "$RUNNER_TEMP/core-lib/runtime.a" -lz -o "$RUNNER_TEMP/core-tests"
+          swiftc -sanitize=address -import-objc-header Core/RuntimeBridge.h Core/RPF7Archive.swift Core/ResourceMemory.swift Core/WorldMath.swift Core/DrawableMesh.swift Core/AssetKey.swift Core/NativeSceneLoader.swift Core/GameRootLocator.swift tests/core.swift "$RUNNER_TEMP/core-lib/runtime.a" -lz -o "$RUNNER_TEMP/core-tests"
           "$RUNNER_TEMP/core-tests" "$RUNNER_TEMP/fixtures"
       - name: Build authored iPhone engine lab (not GTA gameplay)
         run: |

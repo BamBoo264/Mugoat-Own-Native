@@ -9,3 +9,7 @@ Developer data is never edited, copied into this repo or uploaded. CI uses synth
 Build on macOS with Xcode and XcodeGen: `xcodegen generate`, then build the MugoatOwnEngine scheme. A manual/push workflow validates the parser with ASan and builds an unsigned iPhone lab app. Device rendering and FPS are NOT TESTED until exercised on an iPhone.
 
 Format references: https://github.com/dexyfex/CodeWalker (format facts only; no implementation copied). Zstandard is the BSD-licensed 1.5.7 dependency under Vendor/zstd, with its original notices. All other original code in this repository is MIT licensed.
+
+## Documents data discovery (Lab 0.0.2)
+
+Copy/move the existing game folder with the iOS Files app to On My iPhone > Mugoat Own Engine Lab > game, so it directly contains data/ and b/. The app now discovers it at startup/foreground without requiring the picker or making a second copy. Data > Find in Documents rescans; Data > Choose folder remains available. A small instruction file ensures the app Documents location is visible. Discovery is metadata-only and skips asset directories. Diagnostic errors are no longer overwritten by the FPS counter. Preserve the bundle ID and install the update over the app to retain existing Documents data.

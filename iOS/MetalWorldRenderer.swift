@@ -18,6 +18,7 @@ final class MetalWorldRenderer:NSObject,MTKViewDelegate {
   guard let depth=device.makeDepthStencilState(descriptor:state) else{throw ArchiveFailure.unsupported("Metal depth state")};self.depth=depth
   super.init();view.depthStencilPixelFormat = .depth32Float;view.delegate=self;view.preferredFramesPerSecond=60;view.clearColor=MTLClearColor(red:0.07,green:0.12,blue:0.18,alpha:1)
  }
+ func clearMesh(){vertices=nil;indices=nil;indexCount=0}
  func setMesh(_ mesh:StaticMesh)throws {
   var floats:[Float]=[];floats.reserveCapacity(mesh.vertices.count*6)
   for v in mesh.vertices{floats += [v.position.x,v.position.y,v.position.z,v.normal.x,v.normal.y,v.normal.z]}
